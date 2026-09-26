@@ -1,0 +1,9 @@
+{
+  "name": "bitacora-aida-v2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bitácora AIDA — v2 (Firebase Auth + Firestore, multiusuaria)",
+  "scripts": {
+    "test": "node --test"
+  }
+}
