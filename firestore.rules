@@ -1,16 +1,16 @@
 // firestore.rules — spec, sección 5.
 //
-// IMPORTANTE: esto todavía no está probado con el emulador de Firestore
-// (no se pudo descargar en el entorno donde se escribió este archivo:
-// storage.googleapis.com bloqueado). Se adelanta desde Fase 6 porque, en
-// modo producción, Firestore deniega TODO por defecto — sin esto, ninguna
-// operación de db.js funciona contra el proyecto real, ni siquiera para
-// una usuaria autenticada leyendo sus propias entradas.
-//
-// Pendiente antes de dar la Fase 6 por cerrada: probar estas reglas con el
-// simulador de reglas de la consola de Firebase o el emulador local,
-// incluyendo el caso de acceso cruzado (una usuaria intentando leer las
-// entradas de otra, que debe fallar).
+// Publicadas en la consola de Firebase y verificadas ahí mismo con el
+// "Rules playground" (el emulador local de Firestore no se pudo usar
+// desde el entorno donde se escribió este archivo: storage.googleapis.com
+// bloqueado; el playground de la consola cubre el mismo caso sin
+// necesitarlo). Fase 6, 5/5 simulaciones correctas:
+//   1. get /usuarios/uidA/entradas/entrada1, autenticada como uidA → permitir
+//   2. get /usuarios/uidB/entradas/entrada1, autenticada como uidA → denegar
+//      (el caso clave: una usuaria no puede leer las entradas de otra)
+//   3. get /configuracion/parametros, autenticada como uidA          → permitir
+//   4. update /configuracion/parametros, autenticada como uidA       → denegar
+//   5. get /configuracion/parametros, sin autenticar                → denegar
 
 rules_version = '2';
 
