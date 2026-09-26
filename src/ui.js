@@ -427,28 +427,55 @@ function cablearEventos(usuario, config) {
 // es un descuido real, así que acá se agrega una sola vez.
 let listenerDocumentoActivo = false;
 
+// Cuánto hay que moverse horizontalmente antes de considerar que esto es
+// un gesto de deslizar y no un simple clic/toque sobre un botón de la
+// fila (lápiz, eliminar). Por debajo de esto no se llama a
+// setPointerCapture — ver la nota de más abajo sobre por qué eso importa.
+const UMBRAL_ARRASTRE_PX = 8;
+
 function activarSwipe() {
   document.querySelectorAll(".registro-front").forEach((front) => {
     const id = front.dataset.front;
     let startX = 0;
     let dragging = false;
     let startedOpen = false;
+    let pointerIdActivo = null;
 
+    // IMPORTANTE: front.setPointerCapture() ya NO se llama en pointerdown.
+    // Se llamaba ahí antes, y eso rompía los clics reales de mouse sobre
+    // los botones hijos (lápiz, eliminar): apenas se presiona el botón del
+    // mouse, el navegador redirige los eventos de puntero siguientes hacia
+    // "front" en vez del botón, y el clic sintetizado nunca llega al
+    // botón — confirmado con clics reales (no solo simulados) en
+    // computador, que es justo el bug que reportó Ana. Ahora solo se pide
+    // la captura una vez que el movimiento supera UMBRAL_ARRASTRE_PX, es
+    // decir, una vez que de verdad es un gesto de arrastre y no un clic.
     front.addEventListener("pointerdown", (ev) => {
-      dragging = true;
+      dragging = false;
       startX = ev.clientX;
       startedOpen = vista.filaAbierta === id;
+      pointerIdActivo = ev.pointerId;
       front.style.transition = "none";
-      try { front.setPointerCapture(ev.pointerId); } catch { /* ignorar */ }
     });
     front.addEventListener("pointermove", (ev) => {
-      if (!dragging) return;
+      if (ev.pointerId !== pointerIdActivo) return;
       const delta = ev.clientX - startX;
+      if (!dragging) {
+        if (Math.abs(delta) < UMBRAL_ARRASTRE_PX) return;
+        dragging = true;
+        try { front.setPointerCapture(ev.pointerId); } catch { /* ignorar */ }
+      }
       const base = startedOpen ? -84 : 0;
       const x = Math.min(0, Math.max(-84, base + delta));
       front.style.transform = `translateX(${x}px)`;
     });
     const soltar = (ev) => {
+      pointerIdActivo = null;
+      // Nunca se superó el umbral: fue un clic/toque normal, no un
+      // arrastre — no se tocó el transform ni se pidió captura, así que
+      // no hay nada que deshacer acá; se deja que el navegador procese el
+      // clic sobre lo que sea que esté debajo (el propio front, el lápiz,
+      // el botón de eliminar).
       if (!dragging) return;
       dragging = false;
       front.style.transition = "transform 0.2s ease";
