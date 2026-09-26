@@ -25,6 +25,7 @@ import {
 import { app } from "./firebase-app.js";
 import { rangoDelMes } from "./fechas.js";
 import { validarEntrada, validarCambiosParciales, validarParametros } from "./validacion.js";
+import { prepararImportacion } from "./importacion.js";
 
 const firestore = getFirestore(app);
 
@@ -44,8 +45,15 @@ function mensajeDeError(error) {
 
 /**
  * Crea una entrada nueva para la usuaria `uid`.
+ *
+ * `origenImportacionId` es opcional y solo lo usa importarEntradas() más
+ * abajo: guarda el id que la entrada tenía en el respaldo .json de la v1,
+ * para poder reconocer "esta entrada ya se importó" si el mismo archivo
+ * se vuelve a importar más adelante (spec, sección 8) — no reemplaza el
+ * id que Firestore genera para el documento, que sigue siendo el propio.
+ *
  * @param {string} uid
- * @param {{codigo: string, valor: number, fecha: string, comentario?: string}} entrada
+ * @param {{codigo: string, valor: number, fecha: string, comentario?: string, origenImportacionId?: string}} entrada
  */
 async function crearEntrada(uid, entrada) {
   const error = validarEntrada(entrada);
@@ -58,6 +66,7 @@ async function crearEntrada(uid, entrada) {
       fecha: entrada.fecha,
       comentario: entrada.comentario ? entrada.comentario.trim() : "",
       creadoEn: serverTimestamp(),
+      ...(entrada.origenImportacionId ? { origenImportacionId: entrada.origenImportacionId } : {}),
     });
     return { ok: true, id: ref.id };
   } catch (e) {
@@ -172,6 +181,52 @@ async function leerConfiguracion() {
   }
 }
 
+/**
+ * Importa el respaldo .json de la v1 (spec, sección 8) a la cuenta de la
+ * usuaria `uid`. Trae primero todo lo que ya tiene en Firestore, deja que
+ * la lógica pura de importacion.js decida qué entradas son nuevas
+ * (deduplicando por fecha+código+valor, no por el id de la v1, que no
+ * tiene por qué coincidir con ningún id de Firestore), y solo entonces
+ * escribe — así importar el mismo archivo dos veces seguidas no duplica
+ * nada (criterio de aceptación de la Fase 7).
+ *
+ * Las escrituras van una por una (no hay una operación de "batch" en la
+ * capa que usa el resto de db.js): para un respaldo de meses de una sola
+ * usuaria esto es unas pocas docenas de escrituras, nada que justifique la
+ * complejidad extra de un batch de Firestore acá.
+ *
+ * @param {string} uid
+ * @param {unknown} datos - el .json ya parseado
+ */
+async function importarEntradas(uid, datos) {
+  const existentesResultado = await listarTodasLasEntradas(uid);
+  if (!existentesResultado.ok) return existentesResultado;
+
+  const preparado = prepararImportacion(datos, existentesResultado.entradas);
+  if (!preparado.ok) return preparado;
+
+  let insertadas = 0;
+  for (const entrada of preparado.aInsertar) {
+    const resultado = await crearEntrada(uid, entrada);
+    if (!resultado.ok) {
+      // Nos detenemos ante el primer error real de Firestore (ej. sin
+      // conexión a mitad de la importación) en vez de seguir intentando
+      // el resto a ciegas — lo ya insertado queda bien (no hay
+      // duplicados posibles al reintentar, según el mismo criterio de
+      // deduplicación), y la usuaria puede volver a importar el archivo.
+      return { ok: false, error: resultado.error, insertadas };
+    }
+    insertadas++;
+  }
+
+  return {
+    ok: true,
+    insertadas,
+    invalidas: preparado.invalidas,
+    duplicadas: preparado.duplicadas,
+  };
+}
+
 export {
   crearEntrada,
   listarEntradasPorMes,
@@ -179,4 +234,5 @@ export {
   editarEntrada,
   eliminarEntrada,
   leerConfiguracion,
+  importarEntradas,
 };

@@ -6,14 +6,14 @@
 // sale de calculo.js con los parámetros de configuracion/parametros en
 // vez de una tabla fija en el código (spec, Fase 5).
 //
-// NOTA: la v1 también tenía botones de "Exportar respaldo (.json)",
-// "Exportar a Excel" e "Importar respaldo". Esta fase no los incluye
-// todavía — Fase 7 de la spec es justo la migración del histórico de
-// Ana, y ahí se decide cómo se ve la importación/exportación contra
-// Firestore en vez de localStorage. Se deja pendiente a propósito, no
-// olvidado.
+// NOTA: la v1 también tenía "Exportar respaldo (.json)" y "Exportar a
+// Excel", además de "Importar respaldo". Fase 7 (spec, sección 8) agrega
+// acá solo la importación — es lo que hace falta para migrar el
+// histórico de Ana a Firestore una vez. La exportación queda pendiente a
+// propósito, no olvidada: no bloquea la migración y puede agregarse
+// después sin tocar esta pantalla.
 
-import { crearEntrada, listarTodasLasEntradas, editarEntrada, eliminarEntrada } from "./db.js";
+import { crearEntrada, listarTodasLasEntradas, editarEntrada, eliminarEntrada, importarEntradas } from "./db.js";
 import { calcularMes, sumarBreakdowns } from "./calculo.js";
 import { cerrarSesion } from "./auth.js";
 import { mostrarToast, escapeHtml } from "./dom-utils.js";
@@ -121,6 +121,36 @@ async function deshacerEliminar(usuario, parametros) {
   }
   await cargarEntradas();
   dibujar(usuario, { parametros, parametrosError: null });
+}
+
+/**
+ * Importa el respaldo .json de la v1 (spec, sección 8). `archivo` es el
+ * File que entrega el <input type="file">, ya elegido por la usuaria.
+ */
+async function importarRespaldo(usuario, parametros, archivo) {
+  let datos;
+  try {
+    const texto = await archivo.text();
+    datos = JSON.parse(texto);
+  } catch {
+    mostrarToast("Ese archivo no es un .json válido.");
+    return;
+  }
+
+  mostrarToast("Importando…");
+  const resultado = await importarEntradas(uidActual, datos);
+  if (!resultado.ok) {
+    mostrarToast(resultado.error);
+    return;
+  }
+
+  await cargarEntradas();
+  dibujar(usuario, { parametros, parametrosError: null });
+
+  const partes = [`${resultado.insertadas} nueva${resultado.insertadas === 1 ? "" : "s"}`];
+  if (resultado.duplicadas > 0) partes.push(`${resultado.duplicadas} ya existían`);
+  if (resultado.invalidas > 0) partes.push(`${resultado.invalidas} inválida${resultado.invalidas === 1 ? "" : "s"}`);
+  mostrarToast(`Importación lista: ${partes.join(", ")}.`);
 }
 
 async function manejarCerrarSesion() {
@@ -290,6 +320,11 @@ function dibujar(usuario, { parametros, parametrosError }) {
       </div>
     </section>
 
+    <section>
+      <button class="btn-fila" id="btn-importar">Importar respaldo (.json)</button>
+      <input type="file" id="input-importar" accept="application/json,.json" style="display:none;">
+    </section>
+
     <footer>Tus datos quedan asociados a tu cuenta, accesibles desde cualquier dispositivo.</footer>
   `;
 
@@ -365,6 +400,14 @@ function cablearEventos(usuario, config) {
   document.querySelectorAll("[data-eliminar]").forEach((el) => {
     el.onclick = () => pedirEliminar(usuario, parametros, el.dataset.eliminar);
   });
+
+  const inputImportar = document.getElementById("input-importar");
+  document.getElementById("btn-importar").onclick = () => inputImportar.click();
+  inputImportar.onchange = () => {
+    const archivo = inputImportar.files[0];
+    inputImportar.value = ""; // permite elegir el mismo archivo dos veces seguidas
+    if (archivo) importarRespaldo(usuario, parametros, archivo);
+  };
 
   activarSwipe();
 }
