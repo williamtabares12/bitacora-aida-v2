@@ -1,6 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validarEntrada, validarCambiosParciales } from '../src/validacion.js';
+import { validarEntrada, validarCambiosParciales, validarParametros } from '../src/validacion.js';
+
+const PARAMETROS_VALIDOS = {
+  codigos: {
+    Consu: 153171, T1: 198077, T2: 264059, T3: 334620, Sin: 122728,
+    Revis: 502616, Canc: 76937, VP: 135355, 'URG AM': 64122, 'URG pm': 192366, Txp: 87526,
+  },
+  cuotaExtraordinaria: 0.05,
+  ibcPorc: 0.40,
+  salud: 0.125,
+  pension: 0.16,
+  arl: 0.035,
+  sostenimiento: 44000,
+  sucursal: 2294,
+  provisiones: 0.2183,
+};
 
 test('validarEntrada: una entrada completa y correcta no da error', () => {
   const error = validarEntrada({ codigo: 'T1', valor: 198077, fecha: '2026-07-15' });
@@ -41,4 +56,35 @@ test('validarCambiosParciales: valida solo los campos presentes, no exige los de
 
 test('validarCambiosParciales: un objeto de cambios vacío se rechaza (no hay nada que guardar)', () => {
   assert.ok(validarCambiosParciales({}));
+});
+
+test('validarParametros: el documento completo y correcto no da error', () => {
+  assert.equal(validarParametros(PARAMETROS_VALIDOS), null);
+});
+
+test('validarParametros: rechaza ausencia, null o algo que no es un objeto', () => {
+  assert.ok(validarParametros(undefined));
+  assert.ok(validarParametros(null));
+  assert.ok(validarParametros('no es un documento'));
+  assert.ok(validarParametros([1, 2, 3]));
+});
+
+test('validarParametros: rechaza tabla de códigos ausente, vacía o mal tipada', () => {
+  const { codigos, ...sinCodigos } = PARAMETROS_VALIDOS;
+  assert.ok(validarParametros(sinCodigos));
+  assert.ok(validarParametros({ ...PARAMETROS_VALIDOS, codigos: {} }));
+  assert.ok(validarParametros({ ...PARAMETROS_VALIDOS, codigos: [1, 2] }));
+});
+
+test('validarParametros: rechaza un código individual con valor inválido', () => {
+  assert.ok(validarParametros({ ...PARAMETROS_VALIDOS, codigos: { ...PARAMETROS_VALIDOS.codigos, T1: -5 } }));
+  assert.ok(validarParametros({ ...PARAMETROS_VALIDOS, codigos: { ...PARAMETROS_VALIDOS.codigos, T1: '198077' } }));
+  assert.ok(validarParametros({ ...PARAMETROS_VALIDOS, codigos: { ...PARAMETROS_VALIDOS.codigos, T1: 0 } }));
+});
+
+test('validarParametros: rechaza si falta cualquiera de los porcentajes/valores fijos', () => {
+  for (const campo of ['cuotaExtraordinaria', 'ibcPorc', 'salud', 'pension', 'arl', 'sostenimiento', 'sucursal', 'provisiones']) {
+    const { [campo]: _omitido, ...incompleto } = PARAMETROS_VALIDOS;
+    assert.ok(validarParametros(incompleto), `debería rechazar sin "${campo}"`);
+  }
 });

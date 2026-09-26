@@ -1,0 +1,40 @@
+// firestore.rules — spec, sección 5.
+//
+// IMPORTANTE: esto todavía no está probado con el emulador de Firestore
+// (no se pudo descargar en el entorno donde se escribió este archivo:
+// storage.googleapis.com bloqueado). Se adelanta desde Fase 6 porque, en
+// modo producción, Firestore deniega TODO por defecto — sin esto, ninguna
+// operación de db.js funciona contra el proyecto real, ni siquiera para
+// una usuaria autenticada leyendo sus propias entradas.
+//
+// Pendiente antes de dar la Fase 6 por cerrada: probar estas reglas con el
+// simulador de reglas de la consola de Firebase o el emulador local,
+// incluyendo el caso de acceso cruzado (una usuaria intentando leer las
+// entradas de otra, que debe fallar).
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuaria autenticada solo puede leer y escribir sus propias
+    // entradas — nunca las de otra uid.
+    match /usuarios/{uid}/entradas/{entradaId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Cualquier usuaria autenticada puede leer los parámetros del
+    // convenio, pero nadie puede escribirlos desde la app: eso se edita a
+    // mano desde la consola de Firebase (spec, sección 11).
+    match /configuracion/parametros {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Todo lo demás — incluido usuarios/{uid} en sí, que hoy la app no
+    // usa — denegado por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

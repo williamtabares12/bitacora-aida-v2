@@ -11,6 +11,7 @@ import {
   cerrarSesion,
   observarSesion,
 } from "./auth.js";
+import { leerConfiguracion } from "./db.js";
 
 const app = document.getElementById("app");
 
@@ -18,6 +19,51 @@ const app = document.getElementById("app");
 let modo = "login";
 let mensaje = null; // { tipo: "error"|"ok", texto: string }
 let enviando = false;
+
+/**
+ * Caché en memoria de configuracion/parametros (spec, sección 4): se lee
+ * una sola vez por sesión, la primera vez que hay una usuaria autenticada
+ * (antes de eso las reglas de Firestore igual lo negarían, y no hay nada
+ * que mostrar sin sesión). Fase 5 la va a consumir para calcular los
+ * desgloses en vez de tener códigos/porcentajes escritos en el código.
+ */
+let parametrosConvenio = null;
+let parametrosError = null;
+let cargandoParametros = false;
+
+// Espejo de "quién está autenticada ahora mismo", actualizado desde
+// observarSesion() más abajo. main.js no debe leer el estado de sesión de
+// ningún otro lado (spec, sección 7: auth.js encapsula todo lo de
+// Firebase Auth), así que esta variable propia reemplaza cualquier
+// intento de mirar directamente adentro de auth.js.
+let usuarioActivo = null;
+
+async function cargarConfiguracionSiHaceFalta(usuario) {
+  if (parametrosConvenio || cargandoParametros) return;
+  cargandoParametros = true;
+  const resultado = await leerConfiguracion();
+  cargandoParametros = false;
+
+  if (resultado.ok) {
+    parametrosConvenio = resultado.parametros;
+    parametrosError = null;
+  } else {
+    parametrosError = resultado.error;
+    // eslint-disable-next-line no-console
+    console.error("[main.js] No se pudo cargar configuracion/parametros:", resultado.error);
+  }
+
+  // Re-renderizar solo si seguimos en la pantalla de esa misma usuaria —
+  // pudo cerrar sesión mientras esta lectura estaba en vuelo.
+  if (usuarioActivo && usuarioActivo.uid === usuario.uid) {
+    renderInicio(usuarioActivo);
+  }
+}
+
+/** Getter para que Fase 5 (ui.js) pueda leer la configuración cacheada. */
+function obtenerParametrosConvenio() {
+  return parametrosConvenio;
+}
 
 function mostrarToast(texto) {
   const t = document.getElementById("toast");
@@ -161,6 +207,12 @@ function iconoGoogle() {
 
 function renderInicio(usuario) {
   const nombre = usuario.displayName || usuario.email || "";
+  const estadoConfig = parametrosConvenio
+    ? `Configuración del convenio cargada (${Object.keys(parametrosConvenio.codigos).length} códigos).`
+    : parametrosError
+      ? `No se pudo cargar la configuración del convenio: ${parametrosError}`
+      : "Cargando configuración del convenio…";
+
   app.innerHTML = `
     <header><h1>Bitácora AIDA</h1></header>
     <div class="saludo">
@@ -169,6 +221,8 @@ function renderInicio(usuario) {
     </div>
     <div class="placeholder-card">
       Sesión iniciada correctamente. La pantalla de códigos y reportes se conecta acá en la siguiente fase (Firestore).
+      <br><br>
+      ${escapeHtml(estadoConfig)}
     </div>
   `;
 
@@ -181,11 +235,15 @@ function renderInicio(usuario) {
 /* ============ arranque: la sesión decide qué pantalla se ve ============ */
 
 observarSesion((usuario) => {
+  usuarioActivo = usuario;
   if (usuario) {
     renderInicio(usuario);
+    cargarConfiguracionSiHaceFalta(usuario);
   } else {
     modo = "login";
     mensaje = null;
     renderAuth();
   }
 });
+
+export { obtenerParametrosConvenio };

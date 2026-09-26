@@ -15,6 +15,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -23,7 +24,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { app } from "./firebase-app.js";
 import { rangoDelMes } from "./fechas.js";
-import { validarEntrada, validarCambiosParciales } from "./validacion.js";
+import { validarEntrada, validarCambiosParciales, validarParametros } from "./validacion.js";
 
 const firestore = getFirestore(app);
 
@@ -124,4 +125,31 @@ async function eliminarEntrada(uid, entradaId) {
   }
 }
 
-export { crearEntrada, listarEntradasPorMes, editarEntrada, eliminarEntrada };
+/**
+ * Lee configuracion/parametros (spec, sección 4): la tabla de códigos y
+ * los porcentajes/valores fijos del convenio. Nunca hardcodeados en
+ * JavaScript — esto es lo que permite que AIDA actualice una tarifa desde
+ * la consola de Firebase sin tocar ni redesplegar código (spec, Fase 4).
+ *
+ * Valida la forma del documento antes de devolverlo: si Alejandro tipeó
+ * algo mal en la consola (falta un campo, un código con valor no
+ * numérico), es mejor fallar acá con un mensaje claro que dejar que
+ * calculo.js reciba un valor inválido y produzca un desglose incorrecto
+ * sin ningún aviso.
+ */
+async function leerConfiguracion() {
+  try {
+    const snap = await getDoc(doc(firestore, "configuracion", "parametros"));
+    if (!snap.exists()) {
+      return { ok: false, error: 'No existe el documento "configuracion/parametros" en Firestore.' };
+    }
+    const parametros = snap.data();
+    const error = validarParametros(parametros);
+    if (error) return { ok: false, error };
+    return { ok: true, parametros };
+  } catch (e) {
+    return { ok: false, error: mensajeDeError(e) };
+  }
+}
+
+export { crearEntrada, listarEntradasPorMes, editarEntrada, eliminarEntrada, leerConfiguracion };
