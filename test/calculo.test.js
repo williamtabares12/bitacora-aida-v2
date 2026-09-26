@@ -1,6 +1,6 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { calcularMes, sumarBreakdowns } = require('../src/calculo.js');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { calcularMes, sumarBreakdowns } from '../src/calculo.js';
 
 /**
  * Parámetros vigentes del convenio (spec, sección 12), los mismos que

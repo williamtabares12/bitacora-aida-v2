@@ -124,4 +124,4 @@ function sumarBreakdowns(breakdowns) {
   return acumulado;
 }
 
-module.exports = { calcularMes, sumarBreakdowns, CAMPOS_BREAKDOWN, redondear };
+export { calcularMes, sumarBreakdowns, CAMPOS_BREAKDOWN, redondear };
