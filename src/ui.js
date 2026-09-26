@@ -165,8 +165,13 @@ async function actualizarEntrada(usuario, parametros, id, fecha, comentario) {
     return;
   }
   vista.editandoId = null;
+  // Si la edición cambió la fecha a otro mes, el registro se movió: sin
+  // esto la vista se queda mirando el mes viejo, donde el registro ya no
+  // está, y parece que la edición no hizo nada aunque sí se guardó.
+  vista.mesSeleccionado = mesKeyDeFecha(fecha);
   await cargarEntradas();
   dibujar(usuario, { parametros, parametrosError: null });
+  mostrarToast("Registro actualizado");
 }
 
 /* ============ render principal ============ */
