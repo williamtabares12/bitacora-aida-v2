@@ -131,11 +131,99 @@ header h1{ font-size:28px; font-weight:700; letter-spacing:0.1px; margin:0; }
 
 .placeholder-card{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); padding:22px; color:var(--label2); font-size:15px; line-height:1.5; }
 
-/* ---- toast ---- */
+/* ---- toast (con acción opcional, ej. "Deshacer") ---- */
 .toast{
   position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(8px);
-  background:rgba(40,40,42,0.94); color:#fff; padding:11px 16px; border-radius:14px;
+  background:rgba(40,40,42,0.94); color:#fff; padding:11px 14px 11px 16px; border-radius:14px;
   font-size:14px; opacity:0; pointer-events:none; transition:opacity 0.2s ease, transform 0.2s ease;
-  z-index:50; box-shadow:0 4px 14px rgba(0,0,0,0.25); max-width:88vw; text-align:center;
+  z-index:50; display:flex; align-items:center; gap:14px; box-shadow:0 4px 14px rgba(0,0,0,0.25);
+  max-width:88vw; text-align:center;
 }
-.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+.toast button{ background:none; border:none; color:#5AC8FA; font-size:14px; font-weight:600; cursor:pointer; padding:0; white-space:nowrap; font-family:inherit; }
+
+/* ---- pantalla principal (Fase 5): agregar código, mes/reporte ---- */
+header .fecha{ font-size:13px; color:var(--label2); margin-top:1px; display:block; }
+
+section{ margin-bottom:24px; }
+.section-title{
+  font-size:13px; text-transform:uppercase; letter-spacing:0.02em;
+  color:var(--label2); font-weight:590; margin:0 0 8px 4px;
+}
+
+.grid-codigos{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+.codigo-btn{
+  background:var(--card); border-radius:14px; box-shadow:var(--shadow);
+  padding:12px 6px; text-align:center; cursor:pointer;
+  transition:transform 0.15s cubic-bezier(.34,1.56,.64,1); user-select:none;
+}
+.codigo-btn:active{ transform:scale(0.93); }
+.codigo-btn .cod{ font-weight:600; font-size:15px; color:var(--label); display:block; }
+.codigo-btn .val{ display:block; font-size:11.5px; color:var(--label2); margin-top:2px; }
+@media (max-width:360px){ .grid-codigos{ grid-template-columns:repeat(2,1fr); } }
+
+.btn-fila{
+  display:block; width:100%; text-align:left; background:var(--card); border:none;
+  border-radius:12px; padding:14px 16px; font-size:17px; font-weight:400; color:var(--blue);
+  cursor:pointer; box-shadow:var(--shadow);
+}
+.btn-fila:active{ background:var(--fill-tertiary); }
+.btn-fila + .btn-fila{ margin-top:8px; }
+
+.barra-mes{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+select{
+  font-family:inherit; font-size:15px; font-weight:500; color:var(--label);
+  background:var(--card); border:none; border-radius:10px; padding:9px 10px; box-shadow:var(--shadow);
+}
+.segmented{ display:flex; background:var(--fill-tertiary); border-radius:9px; padding:2px; flex-shrink:0; gap:2px; }
+.segmented button{
+  background:transparent; border:none; border-radius:7px; padding:6px 14px;
+  font-size:13px; font-weight:590; color:var(--label); cursor:pointer;
+}
+.segmented button.activo{ background:var(--card); box-shadow:0 1px 2px rgba(0,0,0,0.12); }
+
+.registro-card{ position:relative; border-radius:12px; overflow:hidden; margin-bottom:8px; box-shadow:var(--shadow); }
+.registro-eliminar-fondo{ position:absolute; inset:0; background:var(--red); display:flex; justify-content:flex-end; align-items:stretch; }
+.registro-eliminar-fondo button{ width:84px; border:none; background:transparent; color:#fff; font-weight:600; font-size:14px; cursor:pointer; }
+.registro-front{
+  position:relative; background:var(--card); display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; gap:10px; touch-action:pan-y; z-index:1;
+}
+.registro-front .izq{ display:flex; flex-direction:column; min-width:0; }
+.registro-front .cod{ font-weight:590; font-size:16px; }
+.registro-front .meta{ font-size:13px; color:var(--label2); margin-top:1px; }
+.registro-front .der{ display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.registro-front .val{ font-size:16px; }
+.registro-front .lapiz{ background:none; border:none; color:var(--blue); font-size:16px; cursor:pointer; padding:2px; }
+.vacio{ color:var(--label2); font-size:15px; padding:16px 4px; text-align:center; }
+
+.editar-panel{
+  background:var(--card); border-radius:12px; padding:14px; margin-bottom:8px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:10px;
+}
+.editar-panel .cod-val{ display:flex; justify-content:space-between; font-size:16px; font-weight:590; }
+.editar-panel input{
+  width:100%; padding:10px 12px; border:none; border-radius:9px;
+  font-size:15px; font-family:inherit; background:var(--fill-tertiary); color:var(--label);
+}
+.editar-acciones{ display:flex; gap:10px; }
+.editar-acciones button{ flex:1; border:none; border-radius:9px; padding:10px; font-size:15px; font-weight:600; cursor:pointer; }
+.btn-cancelar-edit{ background:var(--fill-tertiary); color:var(--label); }
+.btn-guardar-edit{ background:var(--blue); color:#fff; }
+
+.hero{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); padding:18px 18px 16px; margin-bottom:10px; }
+.hero .etiqueta{ font-size:13px; color:var(--label2); font-weight:500; margin-bottom:2px; }
+.hero .cifra{ font-size:34px; font-weight:700; letter-spacing:-0.5px; color:var(--green); }
+
+.reporte{ background:var(--card); border-radius:14px; box-shadow:var(--shadow); padding:4px 16px; }
+.linea{ display:flex; justify-content:space-between; align-items:baseline; padding:11px 0; font-size:16px; border-top:0.5px solid var(--separator); }
+.linea:first-child{ border-top:none; }
+.linea .etq{ color:var(--label); }
+.linea .etq small{ color:var(--label2); font-size:12px; display:block; margin-top:2px; font-weight:400; line-height:1.3; }
+.linea.resta .val{ color:var(--red); }
+.linea .val{ font-weight:500; }
+.linea.total{ border-top:0.5px solid var(--separator); padding-top:14px; }
+.linea.total .etq{ font-weight:600; font-size:16px; }
+.linea.total .val{ font-weight:700; font-size:19px; color:var(--green); }
+.subgrupo{ padding-left:14px; }
+.nota{ font-size:12.5px; color:var(--label2); padding:14px 0 12px; border-top:0.5px solid var(--separator); line-height:1.4; }

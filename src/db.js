@@ -89,6 +89,26 @@ async function listarEntradasPorMes(uid, mes) {
 }
 
 /**
+ * Lista TODAS las entradas de la usuaria `uid`, sin filtrar por mes,
+ * ordenadas por fecha ascendente. La vista "Acumulado" (y el selector de
+ * meses disponibles) necesita ver todos los meses a la vez, igual que en
+ * la v1 (que tenía todo en un único array en memoria, cargado de
+ * localStorage) — acá se trae todo una vez y ui.js agrupa por mes en
+ * memoria, en vez de hacer una consulta separada por cada mes.
+ * @param {string} uid
+ */
+async function listarTodasLasEntradas(uid) {
+  try {
+    const q = query(coleccionEntradas(uid), orderBy("fecha"));
+    const snapshot = await getDocs(q);
+    const entradas = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return { ok: true, entradas };
+  } catch (e) {
+    return { ok: false, error: mensajeDeError(e) };
+  }
+}
+
+/**
  * Edita una entrada existente. `cambios` solo debe traer los campos que
  * cambian (codigo, valor, fecha y/o comentario) — updateDoc hace un merge
  * parcial, no reemplaza el documento completo.
@@ -152,4 +172,11 @@ async function leerConfiguracion() {
   }
 }
 
-export { crearEntrada, listarEntradasPorMes, editarEntrada, eliminarEntrada, leerConfiguracion };
+export {
+  crearEntrada,
+  listarEntradasPorMes,
+  listarTodasLasEntradas,
+  editarEntrada,
+  eliminarEntrada,
+  leerConfiguracion,
+};
