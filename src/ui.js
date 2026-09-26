@@ -89,25 +89,60 @@ async function agregarEntrada(usuario, parametros, codigo) {
   mostrarToast(`${codigo} agregado — ${formatoPesos(valor)}`);
 }
 
+// ids con un borrado en curso ahora mismo — solo por si dos toques llegan
+// a alcanzar a correr antes de que el primero termine de redibujar (ver
+// la nota más abajo, en la práctica ya no debería poder pasar, pero es
+// una protección barata).
+const idsEliminando = new Set();
+
 async function pedirEliminar(usuario, parametros, id) {
-  const entrada = entradasCache.find((e) => e.id === id);
-  if (!entrada) return;
+  if (idsEliminando.has(id)) return;
+  const idx = entradasCache.findIndex((e) => e.id === id);
+  if (idx === -1) return;
+  const entrada = entradasCache[idx];
 
-  const resultado = await eliminarEntrada(uidActual, id);
-  if (!resultado.ok) {
-    mostrarToast(resultado.error);
-    return;
-  }
-
+  // Borrado OPTIMISTA: la fila desaparece de la pantalla apenas se toca
+  // "Eliminar", sin esperar la ida y vuelta a Firestore. Antes se
+  // esperaba `await eliminarEntrada(...)` antes de tocar la pantalla — en
+  // una red real (a diferencia de las pruebas locales) eso puede tardar
+  // lo suficiente como para parecer que no pasó nada, así que Ana
+  // terminaba tocando "Eliminar" en el código de al lado mientras el
+  // primer borrado todavía estaba en camino. Ambos terminaban
+  // completándose (cada uno sobre un documento distinto, sin
+  // conflicto), pero ella solo veía desaparecer las dos filas juntas al
+  // final, como si el primer toque no hubiese hecho nada por sí solo.
+  // Mostrando el cambio al instante, ya no hay ventana en la que un
+  // segundo toque pueda superponerse con uno anterior sin que se note.
+  idsEliminando.add(id);
+  entradasCache = entradasCache.filter((e) => e.id !== id);
   clearTimeout(ultimoEliminadoTimer);
-  // Firestore ya borró el documento — "deshacer" recrea una entrada
-  // equivalente (mismo código/valor/fecha/comentario), no revive el mismo
-  // id. Desde la perspectiva de Ana el resultado es el mismo: reaparece.
+  // Firestore todavía no confirmó el borrado en este punto — "deshacer"
+  // recrea una entrada equivalente (mismo código/valor/fecha/comentario),
+  // no revive el mismo id. Desde la perspectiva de Ana el resultado es
+  // el mismo: reaparece.
   ultimoEliminado = { codigo: entrada.codigo, valor: entrada.valor, fecha: entrada.fecha, comentario: entrada.comentario };
-  await cargarEntradas();
   dibujar(usuario, { parametros, parametrosError: null });
   mostrarToast(`${entrada.codigo} eliminado`, "Deshacer", () => deshacerEliminar(usuario, parametros));
   ultimoEliminadoTimer = setTimeout(() => { ultimoEliminado = null; }, 4200);
+
+  const resultado = await eliminarEntrada(uidActual, id);
+  idsEliminando.delete(id);
+
+  if (!resultado.ok) {
+    // No se pudo borrar de verdad (sin conexión, error de Firestore...):
+    // reponer la fila que se había quitado de la pantalla y avisar.
+    entradasCache = [...entradasCache, entrada];
+    clearTimeout(ultimoEliminadoTimer);
+    ultimoEliminado = null;
+    dibujar(usuario, { parametros, parametrosError: null });
+    mostrarToast(`No se pudo eliminar ${entrada.codigo}: ${resultado.error}`);
+    return;
+  }
+
+  // Ya confirmado en el servidor — se recarga por si otro dispositivo
+  // cambió algo mientras tanto (igual que el resto de las acciones).
+  await cargarEntradas();
+  dibujar(usuario, { parametros, parametrosError: null });
 }
 
 async function deshacerEliminar(usuario, parametros) {
@@ -578,21 +613,32 @@ function activarSwipe() {
     let startedOpen = false;
     let pointerIdActivo = null;
 
-    // IMPORTANTE: front.setPointerCapture() ya NO se llama en pointerdown.
-    // Se llamaba ahí antes, y eso rompía los clics reales de mouse sobre
-    // los botones hijos (lápiz, eliminar): apenas se presiona el botón del
-    // mouse, el navegador redirige los eventos de puntero siguientes hacia
-    // "front" en vez del botón, y el clic sintetizado nunca llega al
-    // botón — confirmado con clics reales (no solo simulados) en
-    // computador, que es justo el bug que reportó Ana. Ahora solo se pide
-    // la captura una vez que el movimiento supera UMBRAL_ARRASTRE_PX, es
-    // decir, una vez que de verdad es un gesto de arrastre y no un clic.
+    // front.setPointerCapture() en pointerdown rompía los clics reales de
+    // MOUSE sobre los botones hijos (lápiz, eliminar): apenas se presiona
+    // el botón del mouse, el navegador redirige los eventos de puntero
+    // siguientes hacia "front" en vez del botón, y el clic sintetizado
+    // nunca llega al botón — confirmado con clics reales (no solo
+    // simulados) en computador, que es justo el bug que reportó Ana. En
+    // mouse, entonces, la captura se pide recién cuando el movimiento
+    // supera UMBRAL_ARRASTRE_PX (ver pointermove más abajo), es decir,
+    // una vez que de verdad es un arrastre y no un clic.
+    //
+    // En TOUCH, en cambio, sí conviene capturar de entrada (como hacía la
+    // v1, con años de uso real de Ana en el celular sin este problema):
+    // sin la captura inmediata, un dedo real casi nunca se mueve
+    // perfectamente horizontal, y ese desvío vertical antes de superar
+    // el umbral puede hacer que los eventos de puntero se "escapen" hacia
+    // la fila de al lado (el navegador redirige por hit-testing normal
+    // mientras no hay captura), confundiendo cuál fila se estaba tocando.
     front.addEventListener("pointerdown", (ev) => {
       dragging = false;
       startX = ev.clientX;
       startedOpen = vista.filaAbierta === id;
       pointerIdActivo = ev.pointerId;
       front.style.transition = "none";
+      if (ev.pointerType !== "mouse") {
+        try { front.setPointerCapture(ev.pointerId); } catch { /* ignorar */ }
+      }
     });
     front.addEventListener("pointermove", (ev) => {
       if (ev.pointerId !== pointerIdActivo) return;
