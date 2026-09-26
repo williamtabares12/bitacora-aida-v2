@@ -39,4 +39,25 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
-export { mostrarToast, escapeHtml };
+/**
+ * Dispara la descarga de un archivo generado en memoria (sin pasar por
+ * ningún servidor): crea un Blob, un link temporal con el atributo
+ * "download", lo clickea solo, y lo saca del DOM. Usado por el respaldo
+ * manual y el automático (ver ui.js#exportacion).
+ * @param {string} nombre - nombre de archivo, con extensión
+ * @param {string|ArrayBuffer|Uint8Array} contenido
+ * @param {string} tipoMime
+ */
+function descargarArchivo(nombre, contenido, tipoMime) {
+  const blob = new Blob([contenido], { type: tipoMime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export { mostrarToast, escapeHtml, descargarArchivo };

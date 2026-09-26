@@ -6,17 +6,17 @@
 // sale de calculo.js con los parámetros de configuracion/parametros en
 // vez de una tabla fija en el código (spec, Fase 5).
 //
-// NOTA: la v1 también tenía "Exportar respaldo (.json)" y "Exportar a
-// Excel", además de "Importar respaldo". Fase 7 (spec, sección 8) agrega
-// acá solo la importación — es lo que hace falta para migrar el
-// histórico de Ana a Firestore una vez. La exportación queda pendiente a
-// propósito, no olvidada: no bloquea la migración y puede agregarse
-// después sin tocar esta pantalla.
+// Exportación de respaldo (además de la importación de Fase 7): un botón
+// pregunta el formato (.json o Excel) en vez de imponer uno, y aparte hay
+// un respaldo automático silencioso — ver la nota junto a
+// verificarRespaldoAutomatico() más abajo sobre cómo funciona y por qué
+// es así (sin servidor, sin plan pago de Firebase).
 
 import { crearEntrada, listarTodasLasEntradas, editarEntrada, eliminarEntrada, importarEntradas } from "./db.js";
 import { calcularMes, sumarBreakdowns } from "./calculo.js";
 import { cerrarSesion } from "./auth.js";
-import { mostrarToast, escapeHtml } from "./dom-utils.js";
+import { mostrarToast, escapeHtml, descargarArchivo } from "./dom-utils.js";
+import { construirRespaldoJSON, construirFilasExcel, nombreArchivoRespaldo } from "./exportacion.js";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -50,7 +50,7 @@ let entradasCache = [];
 let cargandoEntradas = false;
 let errorEntradas = null;
 
-let vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta: null };
+let vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta: null, eligiendoFormatoExportar: false };
 let ultimoEliminado = null;
 let ultimoEliminadoTimer = null;
 
@@ -153,6 +153,120 @@ async function importarRespaldo(usuario, parametros, archivo) {
   mostrarToast(`Importación lista: ${partes.join(", ")}.`);
 }
 
+/* ============ exportar respaldo (manual, con elección de formato) ============ */
+
+function nombreParaArchivo(usuario) {
+  return usuario.displayName || usuario.email || null;
+}
+
+function descargarRespaldoJSON(usuario) {
+  const datos = construirRespaldoJSON(nombreParaArchivo(usuario), entradasCache);
+  const texto = JSON.stringify(datos, null, 2);
+  descargarArchivo(nombreArchivoRespaldo(nombreParaArchivo(usuario), "json", hoyISO()), texto, "application/json");
+  mostrarToast("Respaldo (.json) descargado");
+}
+
+// El generador de Excel (ExcelJS) no viene incluido en el proyecto — se
+// carga desde una red de distribución de contenido (CDN) solo la primera
+// vez que alguien realmente pide un Excel, no en cada carga de la app.
+// Así el 90% de las visitas (que no tocan ese botón) no pagan el costo de
+// bajar una librería que no van a usar.
+let excelJSCargando = null;
+function cargarExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (excelJSCargando) return excelJSCargando;
+  excelJSCargando = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+    script.onload = () => resolve(window.ExcelJS);
+    script.onerror = () => reject(new Error("No se pudo cargar el generador de Excel — revisá tu conexión e intentá de nuevo."));
+    document.head.appendChild(script);
+  });
+  return excelJSCargando;
+}
+
+async function descargarRespaldoExcel(usuario) {
+  mostrarToast("Generando Excel…");
+  let ExcelJS;
+  try {
+    ExcelJS = await cargarExcelJS();
+  } catch (e) {
+    mostrarToast(e.message);
+    return;
+  }
+
+  const filas = construirFilasExcel(entradasCache);
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet("Bitácora AIDA");
+  hoja.columns = [
+    { header: "Fecha", key: "Fecha", width: 14 },
+    { header: "Código", key: "Codigo", width: 16 },
+    { header: "Valor", key: "Valor", width: 14 },
+    { header: "Comentario", key: "Comentario", width: 32 },
+  ];
+  hoja.getRow(1).font = { bold: true, color: { argb: "FF1C1C1E" } };
+  hoja.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E5EA" } };
+  filas.forEach((fila) => hoja.addRow(fila));
+  hoja.getColumn("Valor").numFmt = "#,##0";
+
+  hoja.addRow({});
+  const filaTotal = hoja.addRow({ Fecha: "", Codigo: "Total", Valor: filas.reduce((suma, f) => suma + f.Valor, 0), Comentario: "" });
+  filaTotal.font = { bold: true };
+  filaTotal.getCell("Valor").numFmt = "#,##0";
+
+  const buffer = await libro.xlsx.writeBuffer();
+  const nombreArchivo = nombreArchivoRespaldo(nombreParaArchivo(usuario), "xlsx", hoyISO());
+  descargarArchivo(nombreArchivo, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  mostrarToast("Excel descargado");
+}
+
+/* ============ respaldo automático (silencioso, sin servidor) ============
+ *
+ * Un respaldo que corra solo "en el servidor" cada cierto tiempo, sin que
+ * nadie abra la app, necesitaría una función programada de Firebase — y
+ * eso exige pasar del plan gratuito (Spark) al de pago por uso (Blaze),
+ * aunque el costo real termine siendo $0. Para no imponerle eso a Ana, el
+ * respaldo automático es más simple: la primera vez que abre la app cada
+ * semana, se descarga sola una copia .json a su celular/computador, sin
+ * que tenga que acordarse de nada ni tocar ningún botón. Siempre en .json
+ * (liviano, no depende de cargar el generador de Excel desde internet).
+ * Se guarda la fecha del último respaldo en este dispositivo (localStorage,
+ * por eso "por dispositivo": si usa el celular y la tablet, cada uno lleva
+ * su propia cuenta — inofensivo, en el peor caso se descarga un poco más
+ * seguido de lo estrictamente necesario).
+ */
+const DIAS_ENTRE_RESPALDOS_AUTOMATICOS = 7;
+let respaldoAutomaticoVerificadoEstaSesion = false;
+
+function verificarRespaldoAutomatico(usuario) {
+  if (respaldoAutomaticoVerificadoEstaSesion || cargandoEntradas) return;
+  // Ojo: no marcar "ya verificado" hasta acá abajo. Si todavía no hay
+  // ninguna entrada (usuaria nueva, recién entrando), no hay nada que
+  // respaldar — pero eso puede cambiar en cualquier momento de la misma
+  // sesión (agrega su primer código), así que hay que seguir
+  // reintentando en cada render hasta que de verdad haya algo, en vez de
+  // darlo por hecho una sola vez y no volver a mirar en toda la sesión.
+  if (entradasCache.length === 0) return;
+  respaldoAutomaticoVerificadoEstaSesion = true;
+
+  const clave = `bitacora_aida_ultimo_respaldo_${usuario.uid}`;
+  let ultimo = null;
+  try {
+    ultimo = localStorage.getItem(clave);
+  } catch {
+    return; // almacenamiento no disponible (navegación privada, etc.): sin respaldo automático esta vez
+  }
+
+  const ahora = Date.now();
+  const diasDesdeUltimo = ultimo ? (ahora - Number(ultimo)) / 86400000 : Infinity;
+  if (diasDesdeUltimo < DIAS_ENTRE_RESPALDOS_AUTOMATICOS) return;
+
+  descargarRespaldoJSON(usuario);
+  try {
+    localStorage.setItem(clave, String(ahora));
+  } catch { /* si falla el guardado, en la próxima visita se vuelve a intentar */ }
+}
+
 async function manejarCerrarSesion() {
   await cerrarSesion();
   mostrarToast("Sesión cerrada");
@@ -191,7 +305,7 @@ async function renderApp(usuario, { parametros, parametrosError }) {
     uidActual = usuario.uid;
     entradasCache = [];
     errorEntradas = null;
-    vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta: null };
+    vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta: null, eligiendoFormatoExportar: false };
     ultimoEliminado = null;
     if (parametros) await cargarEntradas();
   } else if (parametros && entradasCache.length === 0 && !cargandoEntradas && !errorEntradas) {
@@ -326,12 +440,27 @@ function dibujar(usuario, { parametros, parametrosError }) {
     </section>
 
     <section>
+      ${vista.eligiendoFormatoExportar ? `
+        <div class="editar-panel">
+          <div class="cod-val"><span>¿En qué formato querés el respaldo?</span></div>
+          <div class="editar-acciones exportar-acciones">
+            <button class="btn-guardar-edit" id="btn-exportar-json">.json</button>
+            <button class="btn-guardar-edit" id="btn-exportar-excel">Excel (.xlsx)</button>
+            <button class="btn-cancelar-edit" id="btn-exportar-cancelar">Cancelar</button>
+          </div>
+        </div>
+      ` : `
+        <button class="btn-fila" id="btn-exportar">Exportar respaldo</button>
+      `}
       <button class="btn-fila" id="btn-importar">Importar respaldo (.json)</button>
       <input type="file" id="input-importar" accept="application/json,.json" style="display:none;">
+      <div class="nota">Además, cada ${DIAS_ENTRE_RESPALDOS_AUTOMATICOS} días, la primera vez que abrís la app se descarga sola una copia de respaldo (.json) a este celular o computador — sin que tengas que acordarte de nada.</div>
     </section>
 
     <footer>Tus datos quedan asociados a tu cuenta, accesibles desde cualquier dispositivo.</footer>
   `;
+
+  verificarRespaldoAutomatico(usuario);
 
   cablearEventos(usuario, { parametros, parametrosError });
 }
@@ -413,6 +542,14 @@ function cablearEventos(usuario, config) {
     inputImportar.value = ""; // permite elegir el mismo archivo dos veces seguidas
     if (archivo) importarRespaldo(usuario, parametros, archivo);
   };
+
+  if (vista.eligiendoFormatoExportar) {
+    document.getElementById("btn-exportar-cancelar").onclick = () => { vista.eligiendoFormatoExportar = false; dibujar(usuario, config); };
+    document.getElementById("btn-exportar-json").onclick = () => { vista.eligiendoFormatoExportar = false; dibujar(usuario, config); descargarRespaldoJSON(usuario); };
+    document.getElementById("btn-exportar-excel").onclick = () => { vista.eligiendoFormatoExportar = false; dibujar(usuario, config); descargarRespaldoExcel(usuario); };
+  } else {
+    document.getElementById("btn-exportar").onclick = () => { vista.eligiendoFormatoExportar = true; dibujar(usuario, config); };
+  }
 
   activarSwipe();
 }
