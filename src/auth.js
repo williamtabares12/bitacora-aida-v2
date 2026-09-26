@@ -3,7 +3,6 @@
 // directamente (spec, sección 7): el resto de la app solo conoce estas
 // funciones, no los detalles de Firebase.
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -15,9 +14,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { app } from "./firebase-app.js";
 
-const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const proveedorGoogle = new GoogleAuthProvider();
 
