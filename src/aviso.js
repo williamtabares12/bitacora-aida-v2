@@ -24,4 +24,45 @@ function textoAvisoTratamiento(correoContacto) {
 
 const CORREO_CONTACTO_DEFECTO = "williamtabares.12@gmail.com";
 
-export { textoAvisoTratamiento, CORREO_CONTACTO_DEFECTO };
+/**
+ * Muestra el mismo aviso de tratamiento de datos como una hoja modal
+ * (estilo iOS: sube desde abajo, esquinas redondeadas arriba), disponible
+ * en cualquier momento — no solo al registrarse. Se usa tanto desde la
+ * pantalla de login/registro (main.js) como desde el pie de la app
+ * principal (ui.js), así que vive acá junto con el texto que muestra, en
+ * vez de duplicarse en los dos lugares que la llaman.
+ */
+function abrirModalPrivacidad() {
+  cerrarModalPrivacidad(); // por si quedó uno abierto de antes, no duplicar
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "modal-privacidad";
+  overlay.innerHTML = `
+    <div class="modal-hoja" role="dialog" aria-modal="true" aria-labelledby="modal-privacidad-titulo">
+      <div class="modal-agarre"></div>
+      <h2 id="modal-privacidad-titulo">Tratamiento de datos personales</h2>
+      ${textoAvisoTratamiento(CORREO_CONTACTO_DEFECTO)}
+      <button class="modal-cerrar" id="btn-cerrar-modal-privacidad">Cerrar</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  // Un frame después de insertarlo, para que la transición de "aparecer"
+  // sí se anime — si se agrega la clase "show" en el mismo tick, el
+  // navegador no alcanza a animar desde el estado inicial.
+  requestAnimationFrame(() => overlay.classList.add("show"));
+
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) cerrarModalPrivacidad(); // tocar el fondo oscuro también cierra
+  });
+  document.getElementById("btn-cerrar-modal-privacidad").onclick = cerrarModalPrivacidad;
+}
+
+function cerrarModalPrivacidad() {
+  const overlay = document.getElementById("modal-privacidad");
+  if (!overlay) return;
+  overlay.classList.remove("show");
+  setTimeout(() => overlay.remove(), 250); // espera a que termine la transición de salida
+}
+
+export { textoAvisoTratamiento, CORREO_CONTACTO_DEFECTO, abrirModalPrivacidad };

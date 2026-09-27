@@ -14,7 +14,7 @@ import {
 import { leerConfiguracion } from "./db.js";
 import { renderApp } from "./ui.js";
 import { escapeHtml } from "./dom-utils.js";
-import { textoAvisoTratamiento, CORREO_CONTACTO_DEFECTO } from "./aviso.js";
+import { textoAvisoTratamiento, CORREO_CONTACTO_DEFECTO, abrirModalPrivacidad } from "./aviso.js";
 
 const app = document.getElementById("app");
 
@@ -129,7 +129,10 @@ function renderAuth() {
             : `¿Primera vez acá? <button id="btn-cambiar-modo">Crear cuenta</button>`}
         </div>
       </div>
-      <footer>Tus datos quedan asociados a tu cuenta, no al celular.</footer>
+      <footer>
+        Tus datos quedan asociados a tu cuenta, no al celular.
+        <button class="enlace-privacidad" id="btn-privacidad-auth">Política de privacidad</button>
+      </footer>
     </div>
   `;
 
@@ -238,6 +241,8 @@ function renderAuth() {
     aceptoTratamiento = false;
     renderAuth();
   };
+
+  document.getElementById("btn-privacidad-auth").onclick = abrirModalPrivacidad;
 }
 
 function iconoGoogle() {

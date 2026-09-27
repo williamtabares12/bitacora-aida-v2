@@ -17,6 +17,7 @@ import { calcularMes, sumarBreakdowns } from "./calculo.js";
 import { cerrarSesion } from "./auth.js";
 import { mostrarToast, escapeHtml, descargarArchivo } from "./dom-utils.js";
 import { construirRespaldoJSON, construirFilasExcel, nombreArchivoRespaldo } from "./exportacion.js";
+import { abrirModalPrivacidad } from "./aviso.js";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -506,7 +507,10 @@ function dibujar(usuario, { parametros, parametrosError }) {
       <div class="nota">Además, cada ${DIAS_ENTRE_RESPALDOS_AUTOMATICOS} días, la primera vez que abrís la app se descarga sola una copia de respaldo (.json) a este celular o computador — sin que tengas que acordarte de nada.</div>
     </section>
 
-    <footer>Tus datos quedan asociados a tu cuenta, accesibles desde cualquier dispositivo.</footer>
+    <footer>
+      Tus datos quedan asociados a tu cuenta, accesibles desde cualquier dispositivo.
+      <button class="enlace-privacidad" id="btn-privacidad">Política de privacidad</button>
+    </footer>
   `;
 
   verificarRespaldoAutomatico(usuario);
@@ -554,6 +558,7 @@ function cablearEventos(usuario, config) {
   const { parametros } = config;
 
   document.getElementById("btn-cerrar-sesion").onclick = manejarCerrarSesion;
+  document.getElementById("btn-privacidad").onclick = abrirModalPrivacidad;
 
   document.querySelectorAll(".codigo-btn").forEach((el) => {
     el.onclick = () => agregarEntrada(usuario, parametros, el.dataset.codigo);
