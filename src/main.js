@@ -79,8 +79,11 @@ function renderAuth() {
   app.innerHTML = `
     <div class="auth-screen">
       <div class="gate">
-        <h1>Bitácora AIDA</h1>
-        <p class="subtitulo">Registra tus códigos de facturación y mirá el desglose real de descuentos del contrato sindical, mes a mes.</p>
+        <div class="gate-header">
+          <div class="gate-icono">${iconoApp()}</div>
+          <h1>Bitácora AIDA</h1>
+          <p class="subtitulo">Registra tus códigos de facturación y mirá el desglose real de descuentos del contrato sindical, mes a mes.</p>
+        </div>
 
         ${mensaje ? `<div class="${mensaje.tipo === "error" ? "error-msg" : "ok-msg"}">${escapeHtml(mensaje.texto)}</div>` : ""}
 
@@ -243,6 +246,18 @@ function renderAuth() {
   };
 
   document.getElementById("btn-privacidad-auth").onclick = abrirModalPrivacidad;
+}
+
+// Clipboard con check — referencia visual a "llevar registro verificado",
+// más acorde a lo que hace la app que un ícono genérico. Mismo estilo
+// lineal de SF Symbols que ya usa el resto de la interfaz (trazo, sin
+// relleno), en blanco sobre el círculo azul del sistema.
+function iconoApp() {
+  return `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="4" width="14" height="17" rx="2.5"/>
+    <rect x="9" y="2" width="6" height="3.4" rx="1.2" fill="#fff" stroke="none"/>
+    <path d="M8.3 12.6l2.4 2.4l5-5.4"/>
+  </svg>`;
 }
 
 function iconoGoogle() {

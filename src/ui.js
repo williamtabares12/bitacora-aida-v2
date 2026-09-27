@@ -55,6 +55,30 @@ let vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta:
 let ultimoEliminado = null;
 let ultimoEliminadoTimer = null;
 
+// Si el grid de "Agregar código" queda abierto o colapsado — se recuerda
+// por usuaria y por dispositivo (localStorage), no solo durante la sesión:
+// si Ana lo cierra hoy, mañana lo vuelve a encontrar cerrado, en vez de
+// tener que cerrarlo de nuevo cada vez que entra.
+let seccionCodigosAbierta = true;
+
+function claveColapsoCodigos(uid) {
+  return `bitacora_aida_codigos_abierto_${uid}`;
+}
+function cargarEstadoColapso(uid) {
+  try {
+    const guardado = localStorage.getItem(claveColapsoCodigos(uid));
+    seccionCodigosAbierta = guardado === null ? true : guardado === "1";
+  } catch {
+    seccionCodigosAbierta = true; // almacenamiento no disponible: se queda abierto, sin recordar entre sesiones
+  }
+}
+function guardarEstadoColapso(uid, abierta) {
+  seccionCodigosAbierta = abierta;
+  try {
+    localStorage.setItem(claveColapsoCodigos(uid), abierta ? "1" : "0");
+  } catch { /* sin almacenamiento disponible: no se recuerda para la próxima, no es grave */ }
+}
+
 // Trae TODO el historial de Firestore de una sola vez. Se usa al abrir
 // sesión (o al cambiar de usuaria) y después de una importación masiva —
 // nunca después de agregar/editar/eliminar UN registro: esas acciones ya
@@ -357,6 +381,7 @@ async function renderApp(usuario, { parametros, parametrosError }) {
     errorEntradas = null;
     vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta: null, eligiendoFormatoExportar: false };
     ultimoEliminado = null;
+    cargarEstadoColapso(usuario.uid);
     if (parametros) await cargarEntradas();
   } else if (parametros && entradasCache.length === 0 && !cargandoEntradas && !errorEntradas) {
     // primera vez que hay parametros disponibles para esta misma usuaria
@@ -429,15 +454,17 @@ function dibujar(usuario, { parametros, parametrosError }) {
     ${encabezado}
 
     <section>
-      <div class="section-title">Agregar código</div>
-      <div class="grid-codigos">
-        ${codigos.map(([nombreCodigo, valor]) => `
-          <div class="codigo-btn" data-codigo="${escapeHtml(nombreCodigo)}">
-            <span class="cod">${escapeHtml(nombreCodigo)}</span>
-            <span class="val tabular">${formatoPesos(valor)}</span>
-          </div>
-        `).join("")}
-      </div>
+      <details class="seccion-colapsable" id="detalle-codigos" ${seccionCodigosAbierta ? "open" : ""}>
+        <summary>Agregar código<span class="chevron">▾</span></summary>
+        <div class="grid-codigos">
+          ${codigos.map(([nombreCodigo, valor]) => `
+            <div class="codigo-btn" data-codigo="${escapeHtml(nombreCodigo)}">
+              <span class="cod">${escapeHtml(nombreCodigo)}</span>
+              <span class="val tabular">${formatoPesos(valor)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </details>
     </section>
 
     <section>
@@ -562,6 +589,9 @@ function cablearEventos(usuario, config) {
 
   document.querySelectorAll(".codigo-btn").forEach((el) => {
     el.onclick = () => agregarEntrada(usuario, parametros, el.dataset.codigo);
+  });
+  document.getElementById("detalle-codigos").addEventListener("toggle", (ev) => {
+    guardarEstadoColapso(usuario.uid, ev.target.open);
   });
   document.getElementById("select-mes").onchange = (ev) => {
     vista.mesSeleccionado = ev.target.value;
