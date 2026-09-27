@@ -13,6 +13,8 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
+  getAdditionalUserInfo,
+  deleteUser,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import { app } from "./firebase-app.js";
 
@@ -77,12 +79,38 @@ async function iniciarSesionConCorreo(correo, contrasena) {
   }
 }
 
+/**
+ * `esNuevo` le avisa a quien llama si Firebase acaba de CREAR la cuenta en
+ * este mismo paso (Google la crea sola si el correo nunca se había usado
+ * acá) — así main.js puede detectar cuándo se coló un registro sin pasar
+ * por el aviso de tratamiento de datos (por ejemplo, alguien usando
+ * Google por primera vez desde la pantalla de "Iniciar sesión") y
+ * deshacerlo con anularRegistroGoogleSinAceptar().
+ */
 async function iniciarSesionConGoogle() {
   try {
     const credencial = await signInWithPopup(auth, proveedorGoogle);
-    return { ok: true, usuario: credencial.user };
+    const esNuevo = Boolean(getAdditionalUserInfo(credencial)?.isNewUser);
+    return { ok: true, usuario: credencial.user, esNuevo };
   } catch (error) {
     return { ok: false, error: mensajeDeError(error) };
+  }
+}
+
+/**
+ * Deshace una cuenta de Google recién creada sin haber aceptado el aviso
+ * de tratamiento de datos (spec: el registro queda anulado, no solo
+ * "recomendado"). Borra la cuenta de Firebase Auth en vez de solo cerrar
+ * sesión, para no dejar una cuenta fantasma sin consentimiento dando
+ * vueltas.
+ */
+async function anularRegistroGoogleSinAceptar() {
+  try {
+    if (auth.currentUser) await deleteUser(auth.currentUser);
+  } catch {
+    // Si por lo que sea no se puede borrar (token vencido, etc.), al
+    // menos que no quede con la sesión abierta.
+    await signOut(auth);
   }
 }
 
@@ -115,6 +143,7 @@ export {
   registrarConCorreo,
   iniciarSesionConCorreo,
   iniciarSesionConGoogle,
+  anularRegistroGoogleSinAceptar,
   enviarCorreoRecuperacion,
   cerrarSesion,
   observarSesion,

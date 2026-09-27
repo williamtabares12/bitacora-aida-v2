@@ -7,6 +7,7 @@ import {
   registrarConCorreo,
   iniciarSesionConCorreo,
   iniciarSesionConGoogle,
+  anularRegistroGoogleSinAceptar,
   enviarCorreoRecuperacion,
   observarSesion,
 } from "./auth.js";
@@ -177,12 +178,9 @@ function renderAuth() {
     // Con Google, Firebase puede crear la cuenta en el mismo paso (si el
     // correo nunca se había usado acá), así que este botón también queda
     // sujeto al aviso mientras estamos en la pantalla de "Crear cuenta".
-    // (Si alguien usa Google por primera vez desde la pantalla de "Iniciar
-    // sesión", Firebase igual le crea la cuenta sin pasar por acá — caso
-    // borde conocido, mitigado invitando a cada usuaria a entrar siempre
-    // por "Crear cuenta" la primera vez.)
+    const aceptoAntesDeAbrir = esRegistro && document.getElementById("check-aviso").checked;
     if (esRegistro) {
-      aceptoTratamiento = document.getElementById("check-aviso").checked;
+      aceptoTratamiento = aceptoAntesDeAbrir;
       if (!aceptoTratamiento) {
         mensaje = { tipo: "error", texto: "Para crear tu cuenta primero tenés que aceptar el tratamiento de datos personales (la casilla de abajo)." };
         renderAuth();
@@ -194,10 +192,27 @@ function renderAuth() {
     renderAuth();
     const resultado = await iniciarSesionConGoogle();
     enviando = false;
+
     if (!resultado.ok) {
       mensaje = { tipo: "error", texto: resultado.error };
       renderAuth();
+      return;
     }
+
+    // Firebase acaba de CREAR la cuenta (era un correo de Google nunca
+    // usado acá) y no veníamos de la pantalla de "Crear cuenta" con la
+    // casilla marcada — pasa cuando alguien intenta Google por primera
+    // vez desde "Iniciar sesión". Se deshace el registro (no solo se
+    // cierra sesión) y se manda a aceptar el aviso primero.
+    if (resultado.esNuevo && !aceptoAntesDeAbrir) {
+      await anularRegistroGoogleSinAceptar();
+      modo = "registro";
+      mensaje = { tipo: "error", texto: "Ese correo de Google no tenía cuenta acá todavía. Para crearla, primero aceptá el tratamiento de datos personales." };
+      renderAuth();
+    }
+    // Si resultado.ok y (no era nueva, o era nueva y sí se había
+    // aceptado antes) observarSesion() ya dispara el render principal —
+    // no hace falta hacer nada más acá.
   };
 
   const btnOlvide = document.getElementById("btn-olvide");
