@@ -13,6 +13,7 @@ import {
 import { leerConfiguracion } from "./db.js";
 import { renderApp } from "./ui.js";
 import { escapeHtml } from "./dom-utils.js";
+import { textoAvisoTratamiento, CORREO_CONTACTO_DEFECTO } from "./aviso.js";
 
 const app = document.getElementById("app");
 
@@ -20,6 +21,14 @@ const app = document.getElementById("app");
 let modo = "login";
 let mensaje = null; // { tipo: "error"|"ok", texto: string }
 let enviando = false;
+
+// Aceptación del aviso de tratamiento de datos (Ley 1581/2012). Solo se
+// exige para CREAR una cuenta nueva, no para iniciar sesión con una que ya
+// existe — la ley pide el consentimiento en el momento de recolectar los
+// datos, no en cada inicio de sesión posterior. Se reinicia cada vez que
+// se cambia de modo, para que nadie quede "aceptando de memoria" sin
+// haberlo marcado en la pantalla que tiene al frente ahora mismo.
+let aceptoTratamiento = false;
 
 /**
  * Caché en memoria de configuracion/parametros (spec, sección 4): se lee
@@ -89,6 +98,17 @@ function renderAuth() {
             <label for="input-contrasena">Contraseña</label>
             <input id="input-contrasena" type="password" autocomplete="${esRegistro ? "new-password" : "current-password"}" minlength="6" required>
           </div>
+          ${esRegistro ? `
+            <details class="aviso-tratamiento">
+              <summary>Aviso de tratamiento de datos personales</summary>
+              ${textoAvisoTratamiento(CORREO_CONTACTO_DEFECTO)}
+            </details>
+            <label class="campo-check">
+              <input type="checkbox" id="check-aviso" ${aceptoTratamiento ? "checked" : ""}>
+              Acepto el tratamiento de mis datos personales, como se explica arriba.
+            </label>
+          ` : ""}
+
           <button type="submit" class="btn" id="btn-submit" ${enviando ? "disabled" : ""}>
             ${enviando ? "Un momento…" : (esRegistro ? "Crear cuenta" : "Iniciar sesión")}
           </button>
@@ -120,9 +140,18 @@ function renderAuth() {
     const correo = document.getElementById("input-correo").value.trim();
     const contrasena = document.getElementById("input-contrasena").value;
     const nombre = esRegistro ? document.getElementById("input-nombre").value.trim() : "";
+    aceptoTratamiento = esRegistro ? document.getElementById("check-aviso").checked : aceptoTratamiento;
 
     if (esRegistro && !nombre) {
       mensaje = { tipo: "error", texto: "Contanos cómo te llamás." };
+      renderAuth();
+      return;
+    }
+
+    // Sin la aceptación del aviso no se crea la cuenta — spec: el registro
+    // queda anulado, no solo "recomendado".
+    if (esRegistro && !aceptoTratamiento) {
+      mensaje = { tipo: "error", texto: "Para crear tu cuenta primero tenés que aceptar el tratamiento de datos personales (la casilla de abajo)." };
       renderAuth();
       return;
     }
@@ -145,6 +174,21 @@ function renderAuth() {
   };
 
   document.getElementById("btn-google").onclick = async () => {
+    // Con Google, Firebase puede crear la cuenta en el mismo paso (si el
+    // correo nunca se había usado acá), así que este botón también queda
+    // sujeto al aviso mientras estamos en la pantalla de "Crear cuenta".
+    // (Si alguien usa Google por primera vez desde la pantalla de "Iniciar
+    // sesión", Firebase igual le crea la cuenta sin pasar por acá — caso
+    // borde conocido, mitigado invitando a cada usuaria a entrar siempre
+    // por "Crear cuenta" la primera vez.)
+    if (esRegistro) {
+      aceptoTratamiento = document.getElementById("check-aviso").checked;
+      if (!aceptoTratamiento) {
+        mensaje = { tipo: "error", texto: "Para crear tu cuenta primero tenés que aceptar el tratamiento de datos personales (la casilla de abajo)." };
+        renderAuth();
+        return;
+      }
+    }
     enviando = true;
     mensaje = null;
     renderAuth();
@@ -176,6 +220,7 @@ function renderAuth() {
   document.getElementById("btn-cambiar-modo").onclick = () => {
     modo = esRegistro ? "login" : "registro";
     mensaje = null;
+    aceptoTratamiento = false;
     renderAuth();
   };
 }

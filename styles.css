@@ -115,6 +115,19 @@ button{ font-family:inherit; }
   padding:10px 12px; font-size:14px; margin-bottom:12px; line-height:1.35;
 }
 
+.aviso-tratamiento{
+  background:var(--fill-tertiary); border-radius:10px; padding:10px 12px; margin-bottom:10px;
+  font-size:13px; color:var(--label2); line-height:1.4;
+}
+.aviso-tratamiento summary{ font-weight:600; color:var(--label); cursor:pointer; font-size:13.5px; }
+.aviso-tratamiento p{ margin:8px 0 0; }
+.aviso-tratamiento strong{ color:var(--label); }
+.campo-check{
+  display:flex; align-items:flex-start; gap:8px; font-size:13.5px; color:var(--label2);
+  margin:0 0 14px; line-height:1.35; cursor:pointer;
+}
+.campo-check input{ margin-top:2px; flex-shrink:0; width:16px; height:16px; }
+
 .auth-toggle{ text-align:center; margin-top:18px; font-size:14px; color:var(--label2); }
 .auth-toggle button{ background:none; border:none; color:var(--blue); font-weight:600; cursor:pointer; font-size:14px; font-family:inherit; padding:0; }
 
