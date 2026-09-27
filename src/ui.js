@@ -54,6 +54,16 @@ let vista = { mesSeleccionado: null, modo: "mes", editandoId: null, filaAbierta:
 let ultimoEliminado = null;
 let ultimoEliminadoTimer = null;
 
+// Trae TODO el historial de Firestore de una sola vez. Se usa al abrir
+// sesión (o al cambiar de usuaria) y después de una importación masiva —
+// nunca después de agregar/editar/eliminar UN registro: esas acciones ya
+// saben exactamente qué cambió, así que actualizan entradasCache
+// directamente en memoria (ver agregarEntrada, actualizarEntrada,
+// pedirEliminar, deshacerEliminar) en vez de volver a pedirle a
+// Firestore algo que ya sabemos. Sin esto, cada código agregado o
+// borrado multiplicaba las lecturas por el tamaño completo del
+// historial de esa usuaria — con varias usuarias activas y meses de
+// datos acumulados, eso se acerca rápido al cupo gratis de Firestore.
 async function cargarEntradas() {
   cargandoEntradas = true;
   errorEntradas = null;
@@ -78,13 +88,17 @@ function mesesDisponibles() {
 async function agregarEntrada(usuario, parametros, codigo) {
   const valor = parametros.codigos[codigo];
   const fecha = hoyISO();
-  const resultado = await crearEntrada(uidActual, { codigo, valor, fecha, comentario: "" });
+  const comentario = "";
+  const resultado = await crearEntrada(uidActual, { codigo, valor, fecha, comentario });
   if (!resultado.ok) {
     mostrarToast(resultado.error);
     return;
   }
+  // Ya sabemos exactamente qué se guardó (lo acabamos de enviar
+  // nosotros mismos) — se agrega directo al caché en memoria, sin
+  // volver a traer todo el historial de Firestore.
+  entradasCache = [...entradasCache, { id: resultado.id, codigo, valor, fecha, comentario }];
   vista.mesSeleccionado = mesKeyDeFecha(fecha);
-  await cargarEntradas();
   dibujar(usuario, { parametros, parametrosError: null });
   mostrarToast(`${codigo} agregado — ${formatoPesos(valor)}`);
 }
@@ -138,11 +152,9 @@ async function pedirEliminar(usuario, parametros, id) {
     mostrarToast(`No se pudo eliminar ${entrada.codigo}: ${resultado.error}`);
     return;
   }
-
-  // Ya confirmado en el servidor — se recarga por si otro dispositivo
-  // cambió algo mientras tanto (igual que el resto de las acciones).
-  await cargarEntradas();
-  dibujar(usuario, { parametros, parametrosError: null });
+  // Ya confirmado en el servidor y el caché local ya refleja el borrado
+  // (se quitó arriba, de forma optimista) — no hace falta volver a
+  // traer todo el historial solo para confirmar algo que ya sabemos.
 }
 
 async function deshacerEliminar(usuario, parametros) {
@@ -154,7 +166,7 @@ async function deshacerEliminar(usuario, parametros) {
     mostrarToast(resultado.error);
     return;
   }
-  await cargarEntradas();
+  entradasCache = [...entradasCache, { id: resultado.id, ...datos }];
   dibujar(usuario, { parametros, parametrosError: null });
 }
 
@@ -313,12 +325,14 @@ async function actualizarEntrada(usuario, parametros, id, fecha, comentario) {
     mostrarToast(resultado.error);
     return;
   }
+  // Ya sabemos qué cambió — se aplica directo al caché en memoria, sin
+  // volver a traer todo el historial.
+  entradasCache = entradasCache.map((e) => (e.id === id ? { ...e, fecha, comentario } : e));
   vista.editandoId = null;
   // Si la edición cambió la fecha a otro mes, el registro se movió: sin
   // esto la vista se queda mirando el mes viejo, donde el registro ya no
   // está, y parece que la edición no hizo nada aunque sí se guardó.
   vista.mesSeleccionado = mesKeyDeFecha(fecha);
-  await cargarEntradas();
   dibujar(usuario, { parametros, parametrosError: null });
   mostrarToast("Registro actualizado");
 }
