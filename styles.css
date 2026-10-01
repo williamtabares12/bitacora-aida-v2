@@ -211,7 +211,9 @@ section{ margin-bottom:24px; }
 }
 .seccion-colapsable summary::-webkit-details-marker{ display:none; }
 .seccion-colapsable summary .chevron{
-  color:var(--label3); font-size:12px; transition:transform 0.2s ease; transform:rotate(0deg);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width:28px; height:28px; border-radius:50%; background:var(--fill-tertiary);
+  color:var(--label2); transition:transform 0.2s ease; transform:rotate(0deg);
 }
 .seccion-colapsable:not([open]) summary .chevron{ transform:rotate(-90deg); }
 

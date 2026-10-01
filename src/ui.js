@@ -455,7 +455,7 @@ function dibujar(usuario, { parametros, parametrosError }) {
 
     <section>
       <details class="seccion-colapsable" id="detalle-codigos" ${seccionCodigosAbierta ? "open" : ""}>
-        <summary>Agregar código<span class="chevron">▾</span></summary>
+        <summary>Agregar código<span class="chevron"><svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5l3.5 3.5l3.5-3.5"/></svg></span></summary>
         <div class="grid-codigos">
           ${codigos.map(([nombreCodigo, valor]) => `
             <div class="codigo-btn" data-codigo="${escapeHtml(nombreCodigo)}">
