@@ -67,6 +67,7 @@ function validarCambiosParciales(cambios = {}) {
  * en la cascada de calculo.js.
  */
 const CAMPOS_NUMERICOS_PARAMETROS = [
+  "coordinacion",
   "cuotaExtraordinaria",
   "ibcPorc",
   "salud",

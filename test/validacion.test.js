@@ -7,6 +7,7 @@ const PARAMETROS_VALIDOS = {
     Consu: 153171, T1: 198077, T2: 264059, T3: 334620, Sin: 122728,
     Revis: 502616, Canc: 76937, VP: 135355, 'URG AM': 64122, 'URG pm': 192366, Txp: 87526,
   },
+  coordinacion: 0.04,
   cuotaExtraordinaria: 0.05,
   ibcPorc: 0.40,
   salud: 0.125,

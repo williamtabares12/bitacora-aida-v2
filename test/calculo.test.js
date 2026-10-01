@@ -9,6 +9,7 @@ import { calcularMes, sumarBreakdowns } from '../src/calculo.js';
  * prueba sea determinista y no dependa de la base de datos.
  */
 const PARAMETROS_VIGENTES = {
+  coordinacion: 0.04,
   cuotaExtraordinaria: 0.05,
   ibcPorc: 0.40,
   salud: 0.125,
@@ -19,29 +20,48 @@ const PARAMETROS_VIGENTES = {
   provisiones: 0.2183,
 };
 
-test('calcularMes: cascada completa contra el ejemplo verificado con AIDA (8.000.000)', () => {
-  const entradas = [{ codigo: 'EJEMPLO', valor: 8_000_000, fecha: '2026-01-01' }];
+/**
+ * Caso verificado contra la hoja oficial de AIDA (la que reparte entre
+ * sus trabajadores), bloque "SOPORTE TECNICO" — el que le aplica a Ana:
+ * paga coordinación del 4%, igual que el resto. Confirmado número por
+ * número contra esa hoja (ver conversación) antes de fijarlo acá como
+ * caso de regresión.
+ */
+test('calcularMes: cascada completa contra la hoja oficial de AIDA (9.537.401, con coordinación)', () => {
+  const entradas = [{ codigo: 'EJEMPLO', valor: 9_537_401, fecha: '2026-01-01' }];
 
   const b = calcularMes(entradas, PARAMETROS_VIGENTES);
 
-  assert.equal(b.totalFacturado, 8_000_000);
-  assert.equal(b.cuotaExtraordinaria, 400_000);
-  assert.equal(b.facturacionFinal, 7_600_000);
-  assert.equal(b.ibc, 3_040_000);
-  assert.equal(b.seguridadSocial, 972_800);
-  assert.equal(b.provisiones, 1_659_080);
-  assert.equal(b.totalPagoNeto, 4_921_826);
-  assert.equal(b.totalConProvisiones, 6_580_906);
+  assert.equal(b.totalFacturado, 9_537_401);
+  assert.equal(b.coordinacion, 381_496);
+  assert.equal(b.subtotal, 9_155_905);
+  assert.equal(b.cuotaExtraordinaria, 457_795);
+  assert.equal(b.facturacionFinal, 8_698_110);
+  assert.equal(b.ibc, 3_479_244);
+  assert.equal(b.sostenimiento, 44_000);
+  assert.equal(b.sucursal, 2_294);
+  assert.equal(b.provisiones, 1_898_797);
+  assert.equal(b.totalPagoNeto, 5_639_660); // coincide exacto con "TOTAL PAGO" de la hoja
+});
+
+test('calcularMes: coordinación se descuenta ANTES, y la cuota extraordinaria se calcula sobre lo que queda', () => {
+  const entradas = [{ codigo: 'EJEMPLO', valor: 8_000_000, fecha: '2026-01-01' }];
+  const b = calcularMes(entradas, PARAMETROS_VIGENTES);
+
+  assert.equal(b.coordinacion, 320_000);            // 4% del total facturado
+  assert.equal(b.subtotal, 7_680_000);               // total − coordinación
+  assert.equal(b.cuotaExtraordinaria, 384_000);      // 5% del SUBTOTAL, no del total facturado
+  assert.equal(b.facturacionFinal, 7_296_000);
 });
 
 test('calcularMes: desglose individual de salud, pensión y ARL sobre el IBC', () => {
   const entradas = [{ codigo: 'EJEMPLO', valor: 8_000_000, fecha: '2026-01-01' }];
   const b = calcularMes(entradas, PARAMETROS_VIGENTES);
 
-  // IBC = 3.040.000
-  assert.equal(b.salud, 380_000);   // 12,5%
-  assert.equal(b.pension, 486_400); // 16%
-  assert.equal(b.arl, 106_400);     // 3,5%
+  // IBC = 2.918.400 (ya con coordinación descontada antes)
+  assert.equal(b.salud, 364_800);   // 12,5%
+  assert.equal(b.pension, 466_944); // 16%
+  assert.equal(b.arl, 102_144);     // 3,5%
   assert.equal(b.salud + b.pension + b.arl, b.seguridadSocial);
 });
 
@@ -97,10 +117,10 @@ test('sumarBreakdowns: lista vacía da un acumulado en ceros, no un error', () =
  * una fórmula sin querer, estas revientan solas.
  * ============================================================ */
 
-test('calcularMes: invariante — facturación final + cuota extraordinaria = total facturado', () => {
+test('calcularMes: invariante — facturación final + cuota extraordinaria + coordinación = total facturado', () => {
   for (const total of [0, 1, 100, 8_000_000, 5_950_228, 333_333, 999_999_999]) {
     const b = calcularMes(total > 0 ? [{ codigo: 'X', valor: total, fecha: '2026-01-01' }] : [], PARAMETROS_VIGENTES);
-    assert.equal(b.facturacionFinal + b.cuotaExtraordinaria, b.totalFacturado, `total=${total}`);
+    assert.equal(b.facturacionFinal + b.cuotaExtraordinaria + b.coordinacion, b.totalFacturado, `total=${total}`);
   }
 });
 
@@ -130,7 +150,7 @@ test('calcularMes: invariante — total con provisiones = pago neto + provisione
 test('calcularMes: nunca deja centavos — todos los campos de plata son enteros, incluso con montos "feos"', () => {
   const montosFeos = [1, 3, 7, 33_333, 333_333, 1_234_567, 5_950_228, 999_999_999];
   const camposDePlata = [
-    'totalFacturado', 'cuotaExtraordinaria', 'facturacionFinal', 'ibc',
+    'totalFacturado', 'coordinacion', 'subtotal', 'cuotaExtraordinaria', 'facturacionFinal', 'ibc',
     'salud', 'pension', 'arl', 'seguridadSocial', 'sostenimiento', 'sucursal',
     'provisiones', 'totalPagoNeto', 'totalConProvisiones',
   ];
@@ -157,10 +177,11 @@ test('calcularMes: el orden de las entradas no cambia el total facturado', () =>
 /* ============================================================
  * Simulación con datos reales: las 25 entradas de septiembre de
  * Ana (el mismo archivo que se usó para la Fase 7), contra los
- * parámetros vigentes del convenio. El número queda fijado acá
- * como caso de regresión, pero lo que de verdad lo valida es que
- * Ana lo compare contra su colilla de pago real de ese mes — ver
- * conversación.
+ * parámetros vigentes del convenio — ya con la coordinación del 4%
+ * incluida (confirmado que a Ana sí le aplica, ver conversación).
+ * El número queda fijado acá como caso de regresión, pero lo que
+ * de verdad lo valida es compararlo contra la colilla de pago real
+ * de ese mes, que recién llega en noviembre.
  * ============================================================ */
 
 test('calcularMes: septiembre real de Ana (25 entradas) da el desglose esperado', () => {
@@ -195,16 +216,18 @@ test('calcularMes: septiembre real de Ana (25 entradas) da el desglose esperado'
   const b = calcularMes(entradasSeptiembre, PARAMETROS_VIGENTES);
 
   assert.equal(b.totalFacturado, 5_950_228);
-  assert.equal(b.cuotaExtraordinaria, 297_511);
-  assert.equal(b.facturacionFinal, 5_652_717);
-  assert.equal(b.ibc, 2_261_087);
-  assert.equal(b.salud, 282_636);
-  assert.equal(b.pension, 361_774);
-  assert.equal(b.arl, 79_138);
-  assert.equal(b.seguridadSocial, 723_548);
+  assert.equal(b.coordinacion, 238_009);
+  assert.equal(b.subtotal, 5_712_219);
+  assert.equal(b.cuotaExtraordinaria, 285_611);
+  assert.equal(b.facturacionFinal, 5_426_608);
+  assert.equal(b.ibc, 2_170_643);
+  assert.equal(b.salud, 271_330);
+  assert.equal(b.pension, 347_303);
+  assert.equal(b.arl, 75_973);
+  assert.equal(b.seguridadSocial, 694_606);
   assert.equal(b.sostenimiento, 44_000);
   assert.equal(b.sucursal, 2_294);
-  assert.equal(b.provisiones, 1_233_988);
-  assert.equal(b.totalPagoNeto, 3_648_887);
-  assert.equal(b.totalConProvisiones, 4_882_875);
+  assert.equal(b.provisiones, 1_184_629);
+  assert.equal(b.totalPagoNeto, 3_501_079);
+  assert.equal(b.totalConProvisiones, 4_685_708);
 });

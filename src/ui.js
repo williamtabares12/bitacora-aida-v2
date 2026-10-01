@@ -496,6 +496,8 @@ function dibujar(usuario, { parametros, parametrosError }) {
 
       <div class="reporte">
         <div class="linea"><span class="etq">Total facturado</span><span class="val tabular">${formatoPesos(b.totalFacturado)}</span></div>
+        <div class="linea resta"><span class="etq">Coordinación (${formatoPorcentaje(parametros.coordinacion)})</span><span class="val tabular">−${formatoPesos(b.coordinacion)}</span></div>
+        <div class="linea"><span class="etq">Subtotal</span><span class="val tabular">${formatoPesos(b.subtotal)}</span></div>
         <div class="linea resta"><span class="etq">Cuota extraordinaria AIDA (${formatoPorcentaje(parametros.cuotaExtraordinaria)})</span><span class="val tabular">−${formatoPesos(b.cuotaExtraordinaria)}</span></div>
         <div class="linea"><span class="etq">Facturación final</span><span class="val tabular">${formatoPesos(b.facturacionFinal)}</span></div>
         <div class="linea"><span class="etq">IBC seguridad social (${formatoPorcentaje(parametros.ibcPorc)})</span><span class="val tabular">${formatoPesos(b.ibc)}</span></div>

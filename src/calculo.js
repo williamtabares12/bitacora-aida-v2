@@ -14,7 +14,8 @@
 
 /**
  * @typedef {Object} ParametrosConvenio
- * @property {number} cuotaExtraordinaria  - ej. 0.05
+ * @property {number} coordinacion         - ej. 0.04, se descuenta ANTES que la cuota extraordinaria
+ * @property {number} cuotaExtraordinaria  - ej. 0.05, sobre el subtotal ya sin coordinación
  * @property {number} ibcPorc              - ej. 0.40
  * @property {number} salud                - ej. 0.125
  * @property {number} pension              - ej. 0.16
@@ -55,8 +56,18 @@ function redondear(n) {
 function calcularMes(entradas, parametros) {
   const totalFacturado = entradas.reduce((suma, e) => suma + e.valor, 0);
 
-  const cuotaExtraordinaria = redondear(totalFacturado * parametros.cuotaExtraordinaria);
-  const facturacionFinal = totalFacturado - cuotaExtraordinaria;
+  // Coordinación se descuenta PRIMERO, sobre el total facturado — y la
+  // cuota extraordinaria AIDA se calcula sobre lo que queda (el subtotal),
+  // no sobre el total facturado original. Confirmado contra la hoja oficial
+  // de AIDA (caso "SOPORTE TECNICO", que es el que le aplica a Ana): 4%
+  // de coordinación antes, 5% AIDA después, en ese orden — invertir el
+  // orden da un resultado distinto porque cada uno se calcula sobre una
+  // base diferente.
+  const coordinacion = redondear(totalFacturado * parametros.coordinacion);
+  const subtotal = totalFacturado - coordinacion;
+
+  const cuotaExtraordinaria = redondear(subtotal * parametros.cuotaExtraordinaria);
+  const facturacionFinal = subtotal - cuotaExtraordinaria;
 
   const ibc = redondear(facturacionFinal * parametros.ibcPorc);
   const salud = redondear(ibc * parametros.salud);
@@ -76,6 +87,8 @@ function calcularMes(entradas, parametros) {
 
   return {
     totalFacturado,
+    coordinacion,
+    subtotal,
     cuotaExtraordinaria,
     facturacionFinal,
     ibc,
@@ -95,6 +108,8 @@ function calcularMes(entradas, parametros) {
 /** Campos numéricos de un breakdown que tiene sentido sumar entre meses. */
 const CAMPOS_BREAKDOWN = [
   'totalFacturado',
+  'coordinacion',
+  'subtotal',
   'cuotaExtraordinaria',
   'facturacionFinal',
   'ibc',
