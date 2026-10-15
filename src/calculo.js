@@ -14,8 +14,8 @@
 
 /**
  * @typedef {Object} ParametrosConvenio
- * @property {number} coordinacion         - ej. 0.04, se descuenta ANTES que la cuota extraordinaria
- * @property {number} cuotaExtraordinaria  - ej. 0.05, sobre el subtotal ya sin coordinación
+ * @property {number} coordinacion         - ej. 0.04, sobre el total facturado
+ * @property {number} cuotaExtraordinaria  - ej. 0.05, también sobre el total facturado (9% plano entre las dos)
  * @property {number} ibcPorc              - ej. 0.40
  * @property {number} salud                - ej. 0.125
  * @property {number} pension              - ej. 0.16
@@ -56,18 +56,15 @@ function redondear(n) {
 function calcularMes(entradas, parametros) {
   const totalFacturado = entradas.reduce((suma, e) => suma + e.valor, 0);
 
-  // Coordinación se descuenta PRIMERO, sobre el total facturado — y la
-  // cuota extraordinaria AIDA se calcula sobre lo que queda (el subtotal),
-  // no sobre el total facturado original. Confirmado contra la hoja oficial
-  // de AIDA (caso "SOPORTE TECNICO", que es el que le aplica a Ana): 4%
-  // de coordinación antes, 5% AIDA después, en ese orden — invertir el
-  // orden da un resultado distinto porque cada uno se calcula sobre una
-  // base diferente.
+  // Regla vigente desde octubre de 2026: AIDA descuenta un 9% plano sobre el
+  // total facturado (5% de cuota extraordinaria + 4% de coordinación, los dos
+  // calculados sobre el MISMO total, no uno sobre lo que deja el otro). Lo que
+  // queda (el 91%) es la facturación final, y de ahí salen el IBC y todo lo
+  // demás. Antes la cuota se calculaba sobre el subtotal ya sin coordinación
+  // (quedaba el 91,2%); eso ya no aplica.
   const coordinacion = redondear(totalFacturado * parametros.coordinacion);
-  const subtotal = totalFacturado - coordinacion;
-
-  const cuotaExtraordinaria = redondear(subtotal * parametros.cuotaExtraordinaria);
-  const facturacionFinal = subtotal - cuotaExtraordinaria;
+  const cuotaExtraordinaria = redondear(totalFacturado * parametros.cuotaExtraordinaria);
+  const facturacionFinal = totalFacturado - coordinacion - cuotaExtraordinaria;
 
   const ibc = redondear(facturacionFinal * parametros.ibcPorc);
   const salud = redondear(ibc * parametros.salud);
@@ -88,7 +85,6 @@ function calcularMes(entradas, parametros) {
   return {
     totalFacturado,
     coordinacion,
-    subtotal,
     cuotaExtraordinaria,
     facturacionFinal,
     ibc,
@@ -109,7 +105,6 @@ function calcularMes(entradas, parametros) {
 const CAMPOS_BREAKDOWN = [
   'totalFacturado',
   'coordinacion',
-  'subtotal',
   'cuotaExtraordinaria',
   'facturacionFinal',
   'ibc',
